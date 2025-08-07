@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/central/groups/enviromics/miniconda3/envs/microbeannotator/bin/python
 
 """
 # ==============================================================================
@@ -59,6 +59,7 @@ class RefdataInitializer:
     eukaryote: bool = attr.ib()
     method: str = attr.ib()
     light: bool = attr.ib()
+    no_plot: bool= attr.ib()
     # Attributes initialized by methods
     microbeannotator_db: Path = attr.ib(init=False, converter=Path)
     conversion_db: Path = attr.ib(init=False, converter=Path)
@@ -204,6 +205,10 @@ def main():
                         '''))
     misc_options.add_argument('--version', action='version',  version='MicrobeAnnotator v{}'.format(version),
                         help=textwrap.dedent('''Shows MicrobeAnnotator version'''))
+
+    misc_options.add_argument('--no_plot', dest='no_plot',  action='store_true', required=False,
+                        help=textwrap.dedent('''Do no output MicrobeAnnotator summary plots'''))
+
     args = parser.parse_args()
 
     input_list = args.input_list
@@ -224,6 +229,7 @@ def main():
     cluster = args.cluster
     if cluster != None:
         cluster = cluster.lower()
+    no_plot = args.no_plot
     plot_filename = args.plot_filename
     full = args.full
     refine = args.refine
@@ -260,6 +266,9 @@ def main():
         logger.info(
             f"Running in light mode. Searching only KOfam and Swissprot "
             f"using {method}.")
+    if no_plot:
+        logger.info(
+            f"Running in no_plot mode. Skipping plotting KO summaries. ")
     # ==========================================================================
 
     # ==========================================================================
@@ -282,7 +291,7 @@ def main():
     temp_prot_folder = outdir / "temporal_proteins"
     temp_prot_folder.mkdir(parents=True, exist_ok=True)
     # Initialize reference data class
-    refdata = RefdataInitializer(database, eukaryote, method, light)
+    refdata = RefdataInitializer(database, eukaryote, method, light, no_plot)
     refdata.get_databases()
     # Create dictionary with information per protein file
     protein_file_info = {}
@@ -385,7 +394,7 @@ def main():
                     set(starting_proteins[starting_filename])
                     - set(annotated_proteins))
                 # If there are proteins without KO in starting_proteins
-                if len(starting_proteins[starting_filename]) > 0:
+                if len(starting_proteins[starting_filename]) >= 0:
                     # Filter fasta file and store into next file
                     to_retain = starting_proteins[starting_filename].copy()
                     filterfasta.fastA_filter_list(
@@ -395,7 +404,6 @@ def main():
                 # protein_file : [protein_file_name, final_annotation_file,
                 # kofam_results, fasta_setp_2]
                 protein_file_info[protein_file].append(next_fasta)
-            
             
         # When the process is complete, write step completed (+1)
         # in the log folder. Also, export dictionary with information
@@ -418,7 +426,7 @@ def main():
         for information in protein_file_info.values():
             if len(information) == 4:
                 input_proteins.append(information[-1])
-        if len(input_proteins) > 0:
+        if len(input_proteins) >= 0:
             # Perform searches
             try:
                 pool = multiprocessing.Pool(processes)
@@ -631,12 +639,12 @@ def main():
             # protein_file : [protein_file_name, final_annotation_file,
             # kofam_results, fasta_step_2, Swissprot_Search_File,
             # fasta_step_3, RefSeq_Search_File]
-            temp_dir = protein_file_info.copy()
-            for result in search_results:
-                for filename, info in temp_dir.items():
-                    if len(info) == 6 and result[0] == info[5]:
-                        protein_file_info[filename].append(result[1])
-            del temp_dir
+                temp_dir = protein_file_info.copy()
+                for result in search_results:
+                    for filename, info in temp_dir.items():
+                        if len(info) == 6 and result[0] == info[5]:
+                            protein_file_info[filename].append(result[1])
+                del temp_dir
             # Search annotations in SQLite DB and
             # append to the final annotation file
             logger.info("Extracting RefSeq annotation data")
@@ -762,12 +770,12 @@ def main():
         # protein_file : [protein_file_name, final_annotation_file,
         # kofam_results, fasta_step_2, Swissprot_Search_File,
         # fasta_step_3, RefSeq_Search_File, fasta_step_4, Trembl_Search_File]
-        temp_dir = protein_file_info.copy()
-        for result in search_results:
-            for filename, info in temp_dir.items():
-                if len(info) == 8 and result[0] == info[6]:
-                    protein_file_info[filename].append(result[1])
-        del temp_dir
+            temp_dir = protein_file_info.copy()
+            for result in search_results:
+                for filename, info in temp_dir.items():
+                    if len(info) == 8 and result[0] == info[6]:
+                        protein_file_info[filename].append(result[1])
+            del temp_dir
         # Search annotations in SQLite DB and
         # append to the final annotation file
         logger.info("Extracting Trembl annotation data")
@@ -948,29 +956,32 @@ def main():
     # Parse annotation files and summarize them
     # ==========================================================================
     if process_step == 6:
-        logger.info("Extracting ko numbers and summarizing results")
-        annotation_files = []
-        for information in protein_file_info.values():
-            annotation_folder = information[1].parent
-            ko_numbers = str(annotation_folder / (information[0] + ".ko"))
-            with open(information[1], 'r') as annotations, open(ko_numbers, 'w') as ko_present:
-                for line in annotations:
-                    line = line.strip().split("\t")
-                    # If there are multiple KOs
-                    if line[3] != "":
-                        if len(line[3].split()) > 1:
-                            for element in line[3].split():
-                                ko_present.write("{}\n".format(element))
-                        else:
-                            ko_present.write("{}\n".format(line[3]))
-            annotation_files.append(ko_numbers)
-        prefix = str(Path(outdir) / plot_filename)
-        regular_modules, bifurcation_modules, structural_modules,  \
-        module_information, metabolism_matrix, module_group_matrix = ko_mapper.module_information_importer(annotation_files)
-        metabolic_annotation = ko_mapper.global_mapper(regular_modules, bifurcation_modules, structural_modules, annotation_files)
-        metabolism_matrix_dropped_relabel, module_colors = ko_mapper.create_output_files(metabolic_annotation, metabolism_matrix, module_information, cluster, prefix)
-        ko_mapper.plot_function_barplots(module_colors, module_group_matrix, metabolism_matrix_dropped_relabel, prefix)
-        logger.info("MicrobeAnnotator has finished succefully!")
+        if no_plot:
+            logger.info("MicrobeAnnotator has finished succefully!")
+        else:
+            logger.info("Extracting ko numbers and summarizing results")
+            annotation_files = []
+            for information in protein_file_info.values():
+                annotation_folder = information[1].parent
+                ko_numbers = str(annotation_folder / (information[0] + ".ko"))
+                with open(information[1], 'r') as annotations, open(ko_numbers, 'w') as ko_present:
+                    for line in annotations:
+                        line = line.strip().split("\t")
+                        # If there are multiple KOs
+                        if line[3] != "":
+                            if len(line[3].split()) > 1:
+                                for element in line[3].split():
+                                    ko_present.write("{}\n".format(element))
+                            else:
+                                ko_present.write("{}\n".format(line[3]))
+                annotation_files.append(ko_numbers)
+            prefix = str(Path(outdir) / plot_filename)
+            regular_modules, bifurcation_modules, structural_modules,  \
+            module_information, metabolism_matrix, module_group_matrix = ko_mapper.module_information_importer(annotation_files)
+            metabolic_annotation = ko_mapper.global_mapper(regular_modules, bifurcation_modules, structural_modules, annotation_files)
+            metabolism_matrix_dropped_relabel, module_colors = ko_mapper.create_output_files(metabolic_annotation, metabolism_matrix, module_information, cluster, prefix)
+            ko_mapper.plot_function_barplots(module_colors, module_group_matrix, metabolism_matrix_dropped_relabel, prefix)
+            logger.info("MicrobeAnnotator has finished succefully!")
     # ==========================================================================
 
 
