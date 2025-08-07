@@ -22,6 +22,7 @@ import urllib.request
 import gzip
 from shutil import which
 from shutil import rmtree
+import os
 
 ################################################################################
 """---1.0 Define Functions---"""
@@ -227,9 +228,13 @@ def similarity_search(protein_file, multiple_arguments):
         subprocess.call([diamond_call, 'blastp', '--db', database, '--out', method_output_file, 
         '--outfmt', "6", "qseqid", "sseqid", "pident", "length", "mismatch", "gapopen", "qstart", "qend",
         "sstart", "send", "evalue", "bitscore", "qlen", "slen", "--threads", str(threads),
-        "--unal", "0", "-b", "6", "--quiet", "--max-target-seqs", "6", "--query", protein_file])
+        "--unal", "1", "-b", "6", "--quiet", "--max-target-seqs", "6", "--query", protein_file])
         filtered_file = method_output_file + '.filt'
-        blast_filter_slow(method_output_file, filtered_file, id_perc, bitscore, evalue, aln_percent)
+        try:
+            blast_filter_slow(method_output_file, filtered_file, id_perc, bitscore, evalue, aln_percent)
+        except:
+            os.system(f"touch {method_output_file}")
+            os.system(f"touch {filtered_file}")       
         return (protein_file, filtered_file)
     elif method == 'sword':
         if bin_path == None:
