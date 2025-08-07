@@ -152,7 +152,8 @@ The options we gave the script were:\
 `-t [# threads]`, refers to the number of processors to use per protein file. For example `-t 5` will use five processors per each protein file.\
 Therefore, of you use `-p 2 -t 5`, you will need 10 cores (five for each protein file).\
 `--refine`, will tell MicrobeAnnotator to completement the initial annotations using E.C. numbers or InterPro ids and convert them to KO numbers.\
-`--continue_run`, we know that MicrobeAnnotator can fail. If you have many files it can be really frustrating having to start over (we have been there :)). That is why we added an option to resume the process from the last completed point. This is the flag that does it. 
+`--continue_run`, we know that MicrobeAnnotator can fail. If you have many files it can be really frustrating having to start over (we have been 
+there :)). That is why we added an option to resume the process from the last completed point. This is the flag that does it. \
 `--no_plot`, will tell MicrobeAnnotator to skip plotting `metabolic_summary_barplot` and `metabolic_summary_heatmap`. This flag is useful when running MicrobAnnotator on genome fragements (which may not encode a complete metabolic pathway, causing the default plotting functions to fail) instead of a complete genome.\
 
 At the end you should see your output folder with: \
